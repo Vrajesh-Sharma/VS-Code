@@ -1,97 +1,3 @@
-# # app/utils.py
-# import base64
-# import io
-# from typing import Tuple
-
-# import numpy as np
-# from PIL import Image
-# import torch
-# import torch.nn.functional as F
-
-# from .model import DEVICE, get_model
-
-
-# def load_image_from_bytes(data: bytes, target_size: Tuple[int, int] = (240, 240)) -> np.ndarray:
-#     """Load an image from bytes, convert to grayscale, resize, return (H, W) float32 [0, 1]."""
-#     img = Image.open(io.BytesIO(data)).convert("L")  # grayscale
-#     img = img.resize(target_size, resample=Image.BILINEAR)
-#     arr = np.array(img).astype(np.float32) / 255.0
-#     return arr  # (H, W)
-
-
-# def normalize_per_image(arr: np.ndarray) -> np.ndarray:
-#     """Z-score normalize a single image (H, W)."""
-#     m = arr.mean()
-#     s = arr.std() + 1e-8
-#     return (arr - m) / s
-
-
-# def run_inference_on_image(arr: np.ndarray) -> np.ndarray:
-#     """
-#     arr: (H, W) grayscale
-#     returns: mask (H, W) with labels 0..3
-#     """
-#     model = get_model()
-
-#     # H,W -> H,W,1 -> H,W,4 (repeat) -> C,H,W
-#     H, W = arr.shape
-#     img = normalize_per_image(arr)[..., None]              # (H, W, 1)
-#     img = np.repeat(img, 4, axis=-1)                       # (H, W, 4)
-#     img = np.transpose(img, (2, 0, 1))                     # (C, H, W)
-#     x = torch.from_numpy(img).unsqueeze(0).to(DEVICE)      # (1, C, H, W)
-
-#     with torch.no_grad(), torch.amp.autocast("cuda", enabled=DEVICE.type == "cuda"):
-#         logits = model(x)
-#         probs = F.softmax(logits, dim=1)
-#         preds = torch.argmax(probs, dim=1)                 # (1, H, W)
-
-#     mask = preds[0].cpu().numpy().astype(np.uint8)         # (H, W)
-#     return mask
-
-
-# def colorize_mask(mask: np.ndarray) -> Image.Image:
-#     """
-#     mask: (H, W) labels 0..3
-#     Returns: RGBA image where background is transparent and tumor classes are colored.
-#     """
-#     h, w = mask.shape
-#     overlay = np.zeros((h, w, 4), dtype=np.uint8)  # RGBA
-
-#     colors = {
-#         1: (0, 255, 0, 140),     # class 1: green
-#         2: (255, 255, 0, 140),   # class 2: yellow
-#         3: (255, 0, 0, 140),     # class 3: red
-#     }
-
-#     for cls, (r, g, b, a) in colors.items():
-#         m = mask == cls
-#         overlay[m] = np.array([r, g, b, a], dtype=np.uint8)
-
-#     return Image.fromarray(overlay, mode="RGBA")
-
-
-# def blend_overlay(base_gray: np.ndarray, overlay_rgba: Image.Image) -> Image.Image:
-#     """
-#     base_gray: (H, W) float32 [0,1]
-#     overlay_rgba: RGBA Image (same size)
-#     Returns RGB Image: grayscale MRI with colored tumor overlay.
-#     """
-#     base_uint8 = (np.clip(base_gray, 0, 1) * 255.0).astype(np.uint8)
-#     base_img = Image.fromarray(base_uint8, mode="L").convert("RGBA")
-
-#     # Alpha-composite MRI + tumor overlay
-#     blended = Image.alpha_composite(base_img, overlay_rgba)
-#     return blended.convert("RGB")
-
-
-# def pil_to_base64(img: Image.Image) -> str:
-#     buff = io.BytesIO()
-#     img.save(buff, format="PNG")
-#     encoded = base64.b64encode(buff.getvalue()).decode("utf-8")
-#     return f"data:image/png;base64,{encoded}"
-
-
-# app/utils.py
 import base64
 import io
 import os
@@ -104,9 +10,6 @@ import torch
 import torch.nn.functional as F
 
 from .model import DEVICE, get_model
-
-
-# ─── Image loading ───────────────────────────────────────────────────────────
 
 def load_image_from_bytes(data: bytes, target_size: Tuple[int, int] = (240, 240)) -> np.ndarray:
     """
@@ -154,9 +57,6 @@ def build_4channel_input(arr: np.ndarray) -> np.ndarray:
     img4 = np.stack([ch0, ch1, ch2, ch3], axis=-1)   # (H, W, 4)
     return img4.astype(np.float32)
 
-
-# ─── Inference ───────────────────────────────────────────────────────────────
-
 def run_inference_on_image(arr: np.ndarray) -> np.ndarray:
     """
     arr: (H, W) float32 in 0..255
@@ -175,9 +75,6 @@ def run_inference_on_image(arr: np.ndarray) -> np.ndarray:
 
     mask = preds[0].cpu().numpy().astype(np.uint8)
     return mask
-
-
-# ─── Visualization ────────────────────────────────────────────────────────────
 
 def colorize_mask(mask: np.ndarray) -> Image.Image:
     """
@@ -198,7 +95,6 @@ def colorize_mask(mask: np.ndarray) -> Image.Image:
 
     return Image.fromarray(overlay, mode="RGBA")
 
-
 def blend_overlay(arr: np.ndarray, overlay_rgba: Image.Image) -> Image.Image:
     """
     arr: (H, W) float32, any range (will be auto-rescaled to 0..255)
@@ -213,12 +109,10 @@ def blend_overlay(arr: np.ndarray, overlay_rgba: Image.Image) -> Image.Image:
     blended = Image.alpha_composite(base_img, overlay_rgba)
     return blended.convert("RGB")
 
-
 def pil_to_base64(img: Image.Image) -> str:
     buff = io.BytesIO()
     img.save(buff, format="PNG")
     return "data:image/png;base64," + base64.b64encode(buff.getvalue()).decode("utf-8")
-
 
 def get_tumor_stats(mask: np.ndarray) -> dict:
     """Return basic stats about the predicted tumor mask."""

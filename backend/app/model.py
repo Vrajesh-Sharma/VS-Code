@@ -1,11 +1,10 @@
-# app/model.py
 from pathlib import Path
 from typing import Optional
 
 import torch
 import torch.nn as nn
 
-MODEL_PATH = Path("models/unet_brats_slices_dice_0.729.pth")  # update path if needed
+MODEL_PATH = Path("models/unet_brats_slices_dice_0.729.pth")
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
