@@ -2,9 +2,11 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { UploadCloud, Layers, ScanFace, Database, BrainCircuit } from 'lucide-react';
+import useStore from '../store/useStore';
 
 export default function LandingPage() {
   const navigate = useNavigate();
+  const { user } = useStore();
 
   return (
     <div className="min-h-[calc(100vh-80px)] w-full flex flex-col items-center justify-center p-6 relative overflow-hidden">
@@ -89,10 +91,10 @@ export default function LandingPage() {
         
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
           <button
-            onClick={() => navigate('/upload')}
+            onClick={() => navigate(user ? '/upload' : '/login')}
             className="group px-8 py-4 bg-primary text-primary-foreground font-semibold rounded-2xl text-lg hover:bg-primary/90 hover:scale-105 transition-all duration-300 w-full sm:w-auto shadow-[0_0_40px_rgba(var(--color-primary),0.4)] hover:shadow-[0_0_60px_rgba(var(--color-primary),0.6)] flex items-center justify-center gap-3"
           >
-            Start Scan <UploadCloud className="w-5 h-5 group-hover:-translate-y-1 transition-transform" />
+            {user ? 'Start Scan' : 'Login to Scan'} <UploadCloud className="w-5 h-5 group-hover:-translate-y-1 transition-transform" />
           </button>
           
           <button className="px-8 py-4 bg-white/5 border border-white/10 text-foreground font-semibold rounded-2xl text-lg hover:bg-white/10 hover:border-white/20 transition-all duration-300 w-full sm:w-auto backdrop-blur-md">

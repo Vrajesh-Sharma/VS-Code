@@ -1,8 +1,12 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Routes, Route, useLocation } from "react-router-dom";
 import { AnimatePresence } from "framer-motion";
 import Lenis from '@studio-freight/lenis';
 import { Toaster } from 'sonner';
+
+// Supabase
+import { supabase } from './lib/supabase';
+import useStore from './store/useStore';
 
 // Layout
 import Navbar from "./components/layout/Navbar";
@@ -13,9 +17,29 @@ import LandingPage from "./pages/LandingPage";
 import UploadPage from "./pages/UploadPage";
 import ScannerPage from "./pages/ScannerPage";
 import ResultsPage from "./pages/ResultsPage";
+import HistoryPage from "./pages/HistoryPage";
+import LoginPage from "./pages/LoginPage";
+import ProtectedRoute from "./components/auth/ProtectedRoute";
 
 export default function App() {
   const location = useLocation();
+  const { setUser } = useStore();
+  const [isLoadingAuth, setIsLoadingAuth] = useState(true);
+
+  useEffect(() => {
+    // Check initial auth state
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null);
+      setIsLoadingAuth(false);
+    });
+
+    // Listen to auth changes (login/logout)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+    });
+
+    return () => subscription.unsubscribe();
+  }, [setUser]);
 
   useEffect(() => {
     // Initialize Lenis for smooth scrolling
@@ -43,10 +67,17 @@ export default function App() {
     };
   }, []);
 
-  // Hide sidebar on landing page for cleaner full screen hero, or we can keep it persistent.
-  // The user requested a persistent layout, so we will show it everywhere except maybe wait,
-  // "persistent layout... Navbar (Top) ... Sidebar (Left)"
   const isLanding = location.pathname === '/';
+  const isLogin = location.pathname === '/login';
+  const hideSidebar = isLanding || isLogin;
+
+  if (isLoadingAuth) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background text-foreground font-sans relative flex flex-col">
@@ -62,15 +93,18 @@ export default function App() {
       <Navbar />
 
       <div className="flex flex-1 pt-20"> {/* pt-20 to clear fixed Navbar height */}
-        {!isLanding && <Sidebar />}
+        {!hideSidebar && <Sidebar />}
         
-        <main className={`flex-1 min-w-0 transition-all duration-300 ${!isLanding ? 'ml-20 md:ml-64' : ''}`}>
+        <main className={`flex-1 min-w-0 transition-all duration-300 ${!hideSidebar ? 'ml-20 md:ml-64' : ''}`}>
           <AnimatePresence mode="wait">
             <Routes location={location} key={location.pathname}>
               <Route path="/" element={<LandingPage />} />
-              <Route path="/upload" element={<UploadPage />} />
-              <Route path="/scanner" element={<ScannerPage />} />
-              <Route path="/results" element={<ResultsPage />} />
+              <Route path="/login" element={<LoginPage />} />
+              
+              <Route path="/upload" element={<ProtectedRoute><UploadPage /></ProtectedRoute>} />
+              <Route path="/scanner" element={<ProtectedRoute><ScannerPage /></ProtectedRoute>} />
+              <Route path="/results" element={<ProtectedRoute><ResultsPage /></ProtectedRoute>} />
+              <Route path="/history" element={<ProtectedRoute><HistoryPage /></ProtectedRoute>} />
             </Routes>
           </AnimatePresence>
         </main>

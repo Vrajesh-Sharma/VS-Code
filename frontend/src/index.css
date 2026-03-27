@@ -6,7 +6,7 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
-    --font-heading: 'Poppins', sans-serif;
+    --font-heading: 'Playfair Display', serif;
     --font-sans: 'Inter', sans-serif;
     --color-sidebar-ring: var(--sidebar-ring);
     --color-sidebar-border: var(--sidebar-border);
@@ -54,7 +54,7 @@ body {
 }
 
 h1, h2, h3 {
-  font-family: 'Poppins', sans-serif;
+  font-family: 'Playfair Display', serif;
 }
 :root {
     --background: oklch(0.13 0.02 250);

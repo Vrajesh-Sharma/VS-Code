@@ -4,8 +4,11 @@ import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { UploadCloud, FileImage, X } from 'lucide-react';
+import { UploadCloud, FileImage, X, Loader2 } from 'lucide-react';
 import useStore from '../store/useStore';
+import { supabase } from '../lib/supabase';
+import { uploadImage } from '../lib/upload';
+import { toast } from 'sonner';
 
 const formSchema = z.object({
   patientName: z.string().min(2, 'Name must be at least 2 characters'),
@@ -15,9 +18,10 @@ const formSchema = z.object({
 
 export default function UploadPage() {
   const navigate = useNavigate();
-  const { setPatientInfo, setMriImage } = useStore();
+  const { setPatientInfo, setMriImage, setMriFile, setPatientId } = useStore();
   const [file, setFile] = useState(null);
   const [dragActive, setDragActive] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const {
     register,
@@ -27,14 +31,58 @@ export default function UploadPage() {
     resolver: zodResolver(formSchema),
   });
 
-  const onSubmit = (data) => {
+  const onSubmit = async (data) => {
     if (!file) {
-      alert("Please upload an MRI image.");
+      toast.error("Please upload an MRI image.");
       return;
     }
-    setPatientInfo(data);
-    setMriImage(file);
-    navigate('/scanner');
+    
+    setIsSubmitting(true);
+    
+    try {
+      const { data: userData, error: userError } = await supabase.auth.getUser();
+      if (userError || !userData?.user) {
+        throw new Error("User not authenticated.");
+      }
+
+      const user = userData.user;
+
+      // 🔥 STEP 1: Upload the MRI image explicitly to Supabase Storage first.
+      const image_url = await uploadImage(file, "original");
+      if (!image_url) {
+        throw new Error("Image upload completely failed. Ensure you created the INSERT policy on 'scans' bucket.");
+      }
+
+      // Create profile to satisfy the profiles(id) foreign key constraint
+      await supabase.from('profiles').upsert({ id: user.id });
+
+      // 🔥 STEP 2: Create Patient using the authenticated ID
+      const { data: newPatientArray, error: dbError } = await supabase.from('patients').insert({
+        user_id: user.id,
+        name: data.patientName,
+        age: data.age,
+        notes: data.notes || null
+      }).select('id');
+
+      if (dbError) throw new Error("Database error: " + dbError.message);
+
+      const newPatient = newPatientArray?.[0];
+      if (!newPatient) {
+         throw new Error("Insert succeeded but no rows returned. Ensure your 'patients' table has a SELECT RLS policy.");
+      }
+
+      // 🔥 STEP 3: Store both the URL (for rendering/database paths) and the File Blob (for Python Backend!)
+      setPatientId(newPatient.id);
+      setPatientInfo(data);
+      setMriImage(image_url);  // Public URL from Storage
+      setMriFile(file);        // Raw Blob File for FastAPI
+      navigate('/scanner');
+    } catch (err) {
+      console.error("Failed to process upload flow:", err);
+      toast.error(err.message || "Error saving data. Please try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleDrag = (e) => {
@@ -149,9 +197,10 @@ export default function UploadPage() {
 
           <button 
             type="submit"
-            className="w-full py-4 mt-8 bg-primary text-primary-foreground rounded-xl font-semibold text-lg hover:shadow-[0_0_20px_rgba(var(--color-primary),0.6)] hover:bg-primary/90 transition-all duration-300 transform active:scale-[0.98]"
+            disabled={isSubmitting}
+            className="w-full py-4 mt-8 bg-primary text-primary-foreground rounded-xl font-semibold text-lg hover:shadow-[0_0_20px_rgba(var(--color-primary),0.6)] hover:bg-primary/90 transition-all duration-300 transform active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center"
           >
-            Process Scan
+            {isSubmitting ? <Loader2 className="w-6 h-6 animate-spin" /> : 'Process Scan'}
           </button>
         </form>
       </motion.div>

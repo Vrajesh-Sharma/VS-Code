@@ -18,7 +18,12 @@ export default function ResultsPage() {
       return;
     }
     
-    // Create local object URL for the uploaded MRI image (original)
+    if (typeof mriImage === 'string') {
+      setOriginalImageUrl(mriImage);
+      return;
+    }
+    
+    // Fallback if mriImage is still passed as a raw File/Blob
     const objectUrl = URL.createObjectURL(mriImage);
     setOriginalImageUrl(objectUrl);
 
