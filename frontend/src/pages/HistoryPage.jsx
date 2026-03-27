@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Database, Search, FileImage, User, Calendar, ExternalLink, Loader2, AlertTriangle, CheckCircle2, X } from 'lucide-react';
+import { Database, Search, FileImage, User, Calendar, ExternalLink, Loader2, AlertTriangle, CheckCircle2, X, Trash2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import useStore from '../store/useStore';
 import { toast } from 'sonner';
@@ -13,6 +13,7 @@ export default function HistoryPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [selectedScan, setSelectedScan] = useState(null);
+  const [deletingScan, setDeletingScan] = useState(null);
 
   useEffect(() => {
     if (user) {
@@ -27,6 +28,7 @@ export default function HistoryPage() {
         .from('scans')
         .select(`
           id,
+          patient_id,
           created_at,
           result,
           confidence,
@@ -55,6 +57,40 @@ export default function HistoryPage() {
   const filteredScans = scans.filter(s => 
     s.patients?.name?.toLowerCase().includes(search.toLowerCase())
   );
+
+  const handleDeleteConfirm = async () => {
+    if (!deletingScan || !deletingScan.patient_id) return;
+    
+    try {
+      // 1. Delete associated scans first to satisfy foreign keys
+      const { error: scansErr } = await supabase
+        .from('scans')
+        .delete()
+        .eq('patient_id', deletingScan.patient_id)
+        .eq('user_id', user.id); 
+        
+      if (scansErr) throw scansErr;
+
+      // 2. Delete patient
+      const { error: patientErr } = await supabase
+        .from('patients')
+        .delete()
+        .eq('id', deletingScan.patient_id)
+        .eq('user_id', user.id);
+
+      if (patientErr) throw patientErr;
+
+      toast.success("Patient deleted successfully");
+      setDeletingScan(null);
+      
+      // Instantly remove all scans for that patient from the local UI
+      setScans(prev => prev.filter(s => s.patient_id !== deletingScan.patient_id));
+      
+    } catch (err) {
+      console.error(err);
+      toast.error("Error deleting patient");
+    }
+  };
 
   return (
     <div className="min-h-[calc(100vh-80px)] w-full p-6 md:p-12 pb-24 lg:pt-8 bg-background relative overflow-hidden">
@@ -167,6 +203,16 @@ export default function HistoryPage() {
                                  <ExternalLink className="w-4 h-4" />
                                </a>
                              )}
+                             <button 
+                               onClick={(e) => { 
+                                 e.stopPropagation(); 
+                                 setDeletingScan(scan); 
+                               }}
+                               className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors tooltip-trigger ml-2" 
+                               title="Delete Patient"
+                             >
+                               <Trash2 className="w-4 h-4" />
+                             </button>
                           </div>
                         </td>
                       </tr>
@@ -238,6 +284,51 @@ export default function HistoryPage() {
                      CONF: {selectedScan.confidence ? `${(selectedScan.confidence <= 1 ? selectedScan.confidence * 100 : selectedScan.confidence).toFixed(1)}%` : 'N/A'}
                    </p>
                  </div>
+               </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Delete Confirmation Modal */}
+      <AnimatePresence>
+        {deletingScan && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+            <motion.div
+               initial={{ opacity: 0 }}
+               animate={{ opacity: 1 }}
+               exit={{ opacity: 0 }}
+               onClick={() => setDeletingScan(null)}
+               className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            />
+            <motion.div
+               initial={{ opacity: 0, scale: 0.95, y: 20 }}
+               animate={{ opacity: 1, scale: 1, y: 0 }}
+               exit={{ opacity: 0, scale: 0.95, y: 20 }}
+               className="glass-panel w-full max-w-sm rounded-3xl p-6 relative z-10 border border-destructive/20 shadow-[0_0_50px_rgba(255,50,50,0.1)] flex flex-col items-center text-center"
+            >
+               <div className="w-16 h-16 rounded-full bg-destructive/10 flex items-center justify-center mb-4">
+                 <AlertTriangle className="w-8 h-8 text-destructive" />
+               </div>
+               
+               <h3 className="text-xl font-bold text-white mb-2">Delete Patient</h3>
+               <p className="text-muted-foreground text-sm mb-6">
+                 Are you sure you want to delete <strong className="text-white">{deletingScan.patients?.name || 'this patient'}</strong> and all associated scans? This action cannot be undone.
+               </p>
+               
+               <div className="flex gap-3 w-full">
+                 <button 
+                   onClick={() => setDeletingScan(null)}
+                   className="flex-1 py-3 px-4 rounded-xl bg-white/5 hover:bg-white/10 text-white font-medium transition-colors border border-white/10"
+                 >
+                   Cancel
+                 </button>
+                 <button 
+                   onClick={handleDeleteConfirm}
+                   className="flex-1 py-3 px-4 rounded-xl bg-destructive hover:bg-destructive/90 text-white font-semibold transition-colors shadow-lg"
+                 >
+                   Confirm Delete
+                 </button>
                </div>
             </motion.div>
           </div>

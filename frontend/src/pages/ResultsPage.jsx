@@ -4,6 +4,8 @@ import { useNavigate } from 'react-router-dom';
 import { RefreshCcw, FileText, CheckCircle2, AlertTriangle, User, BrainCircuit, Scan, Download } from 'lucide-react';
 import useStore from '../store/useStore';
 import { PieChart, Pie, Cell } from 'recharts';
+import { toast } from 'sonner';
+import { jsPDF } from 'jspdf';
 
 export default function ResultsPage() {
   const navigate = useNavigate();
@@ -46,6 +48,173 @@ export default function ResultsPage() {
   // Extract real backend images
   const overlayImage = scanResult.overlay_image;
   const rawMask = scanResult.raw_mask;
+  
+  // Helper to parse dominant tumor class safely
+  const getDominantClass = (classCounts) => {
+    if (!classCounts || typeof classCounts !== 'object' || Object.keys(classCounts).length === 0) {
+      return "Unspecified Region";
+    }
+
+    let dominant = "Unknown Type";
+    let max = 0;
+
+    const labelMap = {
+      '1': 'Necrotic Core',
+      '2': 'Peritumoral Edema',
+      '3': 'Non-Enhancing Tumor',
+      '4': 'Enhancing Tumor',
+      'Necrosis': 'Necrotic Core',
+      'Edema': 'Peritumoral Edema',
+      'Enhancing Tumor': 'Enhancing Tumor'
+    };
+
+    for (const [key, val] of Object.entries(classCounts)) {
+       if (key === '0' || key === 'Background' || key === 'background') continue;
+       if (typeof val === 'number' && val > max) {
+         max = val;
+         dominant = labelMap[key] || key;
+       }
+    }
+    
+    if (max === 0) return "Unspecified Region";
+    return dominant;
+  };
+
+  const handleDownloadImage = async () => {
+    try {
+      let urlToDownload = '';
+      let filename = '';
+
+      if (activeView === 'original') {
+        urlToDownload = originalImageUrl;
+        filename = `TRC_Original_MRI_${patientInfo.patientName || 'Scan'}.jpg`;
+      } else if (activeView === 'overlay') {
+        urlToDownload = overlayImage ? (overlayImage.startsWith('data:') || overlayImage.startsWith('http') ? overlayImage : `data:image/jpeg;base64,${overlayImage}`) : originalImageUrl;
+        filename = `TRC_AI_Overlay_${patientInfo.patientName || 'Scan'}.jpg`;
+      } else if (activeView === 'mask') {
+        if (!rawMask) {
+          toast.error("Mask image unavailable to download");
+          return;
+        }
+        urlToDownload = rawMask.startsWith('data:') || rawMask.startsWith('http') ? rawMask : `data:image/png;base64,${rawMask}`;
+        filename = `TRC_Segmentation_Mask_${patientInfo.patientName || 'Scan'}.png`;
+      }
+
+      if (urlToDownload.startsWith('data:')) {
+         const link = document.createElement('a');
+         link.href = urlToDownload;
+         link.download = filename;
+         document.body.appendChild(link);
+         link.click();
+         document.body.removeChild(link);
+      } else {
+         const response = await fetch(urlToDownload);
+         const blob = await response.blob();
+         const blobUrl = URL.createObjectURL(blob);
+         
+         const link = document.createElement('a');
+         link.href = blobUrl;
+         link.download = filename;
+         document.body.appendChild(link);
+         link.click();
+         document.body.removeChild(link);
+         URL.revokeObjectURL(blobUrl);
+      }
+      toast.success("Image downloaded successfully");
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to download image");
+    }
+  };
+
+  const handleDownloadReport = () => {
+    try {
+      const doc = new jsPDF();
+      const margin = 20;
+      let yPos = 20;
+
+      // Title header
+      doc.setFontSize(22);
+      doc.setTextColor(0, 50, 150);
+      doc.text("Tumor Trace Clinical Report", margin, yPos);
+      yPos += 15;
+
+      // Session ID and Timestamp
+      doc.setFontSize(10);
+      doc.setTextColor(100, 100, 100);
+      doc.text(`Session ID: TRC-${Math.floor(Math.random() * 90000) + 10000}`, margin, yPos);
+      yPos += 6;
+      doc.text(`Generated: ${new Date().toLocaleString()}`, margin, yPos);
+      yPos += 12;
+
+      // Divider line
+      doc.setDrawColor(200, 200, 200);
+      doc.line(margin, yPos, 190, yPos);
+      yPos += 12;
+
+      // Patient Details
+      doc.setFontSize(16);
+      doc.setTextColor(20, 20, 20);
+      doc.text("Patient Context", margin, yPos);
+      yPos += 8;
+
+      doc.setFontSize(12);
+      doc.setTextColor(60, 60, 60);
+      doc.text(`Patient Name: ${patientInfo.patientName || 'Anonymous'}`, margin, yPos);
+      yPos += 6;
+      doc.text(`Age: ${patientInfo.age || 'N/A'}`, margin, yPos);
+      yPos += 12;
+
+      // AI Analysis Box
+      doc.setFontSize(16);
+      doc.setTextColor(20, 20, 20);
+      doc.text("AI Radiomics Analysis (DeepRes V4)", margin, yPos);
+      yPos += 8;
+
+      doc.setFontSize(12);
+      if (hasTumor) {
+        doc.setTextColor(220, 38, 38); // Tailwind red
+        doc.text("Primary Diagnosis: Tumor Detected", margin, yPos);
+        yPos += 8;
+        
+        doc.setTextColor(60, 60, 60);
+        doc.text(`Confidence Score: ${normalizedConfidence}%`, margin, yPos);
+        yPos += 8;
+        doc.text(`Morphology Class: ${getDominantClass(stats.class_counts)}`, margin, yPos);
+        yPos += 8;
+        doc.text(`Tumor Area Coverage: ${stats.tumor_area_pct ? `${stats.tumor_area_pct.toFixed(2)}%` : 'N/A'}`, margin, yPos);
+        yPos += 12;
+      } else {
+        doc.setTextColor(22, 163, 74); // Tailwind green
+        doc.text("Primary Diagnosis: No Anomalies Detected", margin, yPos);
+        yPos += 8;
+
+        doc.setTextColor(60, 60, 60);
+        doc.text(`Confidence Score: ${normalizedConfidence}%`, margin, yPos);
+        yPos += 12;
+      }
+
+      // Notes Section
+      doc.setFontSize(16);
+      doc.setTextColor(20, 20, 20);
+      doc.text("Clinical Notes", margin, yPos);
+      yPos += 8;
+
+      doc.setFontSize(12);
+      doc.setTextColor(60, 60, 60);
+      const notesLines = doc.splitTextToSize(patientInfo.notes || 'No preliminary clinical notes provided.', 170);
+      doc.text(notesLines, margin, yPos);
+      yPos += (notesLines.length * 6) + 15;
+
+      // Save document
+      doc.save(`TRC_Clinical_Report_${patientInfo.patientName?.replace(/\s+/g, '_') || 'Anonymous'}.pdf`);
+      
+      toast.success("Clinical Report PDF downloaded successfully");
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to generate PDF report");
+    }
+  };
   
   // Recharts data for the confidence gauge
   const chartData = [
@@ -198,6 +367,15 @@ export default function ResultsPage() {
                        {hasTumor ? 'Tumor Detected' : 'No Anomalies'}
                      </h3>
                    </div>
+                   {hasTumor && (
+                     <div className="mt-4 flex flex-col gap-1.5 border-l-2 border-destructive/30 pl-3">
+                       <p className="text-[13px] uppercase tracking-widest text-muted-foreground font-semibold">Detected Type</p>
+                       <p className="text-sm font-mono text-white/90">{getDominantClass(stats.class_counts)}</p>
+                       
+                       <p className="text-[13px] uppercase tracking-widest text-muted-foreground font-semibold mt-1">Tumor Area</p>
+                       <p className="text-sm font-mono text-white/90">{stats.tumor_area_pct ? `${stats.tumor_area_pct.toFixed(2)}%` : 'Calculating...'}</p>
+                     </div>
+                   )}
                  </div>
                  
                  {/* Recharts Circular Progress Gauge */}
@@ -267,10 +445,16 @@ export default function ResultsPage() {
 
             {/* Action Buttons */}
             <div className="grid grid-cols-2 gap-4 mt-auto">
-               <button className="flex items-center justify-center gap-2 py-4 bg-white/5 hover:bg-white/10 rounded-2xl transition-all duration-300 font-semibold border border-white/10 hover:border-white/20">
-                 <Download className="w-5 h-5" /> DICOM
+               <button 
+                 onClick={handleDownloadImage}
+                 className="flex items-center justify-center gap-2 py-4 bg-white/5 hover:bg-white/10 rounded-2xl transition-all duration-300 font-semibold border border-white/10 hover:border-white/20"
+               >
+                 <Download className="w-5 h-5" /> Download Scan
                </button>
-               <button className="flex items-center justify-center gap-2 py-4 bg-primary text-primary-foreground hover:bg-primary/90 rounded-2xl transition-all duration-300 font-semibold shadow-[0_0_20px_rgba(var(--color-primary),0.3)] hover:shadow-[0_0_30px_rgba(var(--color-primary),0.5)] transform hover:-translate-y-1">
+               <button 
+                 onClick={handleDownloadReport}
+                 className="flex items-center justify-center gap-2 py-4 bg-primary text-primary-foreground hover:bg-primary/90 rounded-2xl transition-all duration-300 font-semibold shadow-[0_0_20px_rgba(var(--color-primary),0.3)] hover:shadow-[0_0_30px_rgba(var(--color-primary),0.5)] transform hover:-translate-y-1"
+               >
                  <FileText className="w-5 h-5" /> Full Report
                </button>
             </div>
