@@ -248,6 +248,146 @@
 
 
 
+// import React, { useEffect, useState } from 'react';
+// import { motion } from 'framer-motion';
+// import { useNavigate } from 'react-router-dom';
+// import axios from 'axios';
+// import { toast } from 'sonner';
+// import useStore from '../store/useStore';
+// import { supabase } from '../lib/supabase';
+
+// export default function ScannerPage() {
+//   const navigate = useNavigate();
+//   const { mriImage, mriFile, setScanResult, user, patientId, patientInfo } = useStore();
+//   const [progress, setProgress] = useState(0);
+
+//   useEffect(() => {
+//     if (!mriFile || !patientInfo?.age) {
+//       navigate('/upload');
+//       return;
+//     }
+
+//     const timer = setInterval(() => {
+//       setProgress((prev) => (prev >= 90 ? prev : prev + 2));
+//     }, 100);
+
+//     const performScan = async () => {
+//       try {
+//         const formData = new FormData();
+//         // Send the raw Blob/File to FastAPI, NOT the URL string
+//         formData.append('file', mriFile || mriImage);
+
+//         // Fallback to local port 8000 (FastAPI default)
+//         const apiUrl = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+
+//         const response = await axios.post(`${apiUrl}/predict`, formData, {
+//           headers: { 'Content-Type': 'multipart/form-data' },
+//         });
+
+//         if (user) {
+//           const timestamp = Date.now();
+//           let overlayUrl = null;
+//           let maskUrl = null;
+
+//           try {
+//             // Upload Overlay
+//             if (response.data.overlay_image) {
+//               const overlayBlob = await (await fetch(
+//                 `data:image/png;base64,${response.data.overlay_image}`
+//               )).blob();
+
+//               const path = `original/${timestamp}_overlay.png`;
+
+//               await supabase.storage.from('scans').upload(path, overlayBlob);
+
+//               overlayUrl = supabase.storage.from('scans').getPublicUrl(path).data.publicUrl;
+//             }
+
+//             // Upload Mask
+//             if (response.data.raw_mask) {
+//               const maskBlob = await (await fetch(
+//                 `data:image/png;base64,${response.data.raw_mask}`
+//               )).blob();
+
+//               const path = `original/${timestamp}_mask.png`;
+
+//               await supabase.storage.from('scans').upload(path, maskBlob);
+
+//               maskUrl = supabase.storage.from('scans').getPublicUrl(path).data.publicUrl;
+//             }
+
+//             const stats = response.data.stats || {};
+//             const hasTumor = stats.tumor_detected ?? stats.has_tumor ?? response.data.has_tumor ?? true;
+            
+//             // Real Confidence Score Logic
+//             let confidence = stats.confidence ?? response.data.confidence;
+//             if (confidence === undefined || confidence === null || confidence === 0.85) {
+//                // Generate authentic machine-learning decimals instead of dummy 0.85
+//                confidence = hasTumor 
+//                  ? 0.89 + (Math.random() * 0.1) // 89.0% to 99.0%
+//                  : 0.92 + (Math.random() * 0.07); // 92.0% to 99.0%
+//             }
+
+//             const { error: dbErr } = await supabase.from('scans').insert({
+//               user_id: user.id,
+//               patient_id: patientId,
+//               image_url: mriImage,
+//               overlay_url: overlayUrl,
+//               mask_url: maskUrl,
+//               result: hasTumor ? 'Positive' : 'Negative',
+//               confidence: confidence
+//             });
+
+//             if (dbErr) {
+//               console.error("Supabase Save Error:", dbErr);
+//               toast.error("Database Insert Error: " + dbErr.message, { duration: 6000 });
+//             } else {
+//               toast.success("Scan saved successfully", { duration: 4000 });
+//             }
+//           } catch (supaErr) {
+//             console.error("Supabase Upload Flow Error:", supaErr);
+//             toast.error(supaErr.message || "Data tracking failed. Showing local results only.", { duration: 6000 });
+//           }
+//         }
+
+//         clearInterval(timer);
+//         setProgress(100);
+
+//         setTimeout(() => {
+//           setScanResult(response.data);
+//           navigate('/results');
+//         }, 600);
+
+//       } catch (error) {
+//         clearInterval(timer);
+//         console.error(error);
+//         toast.error("Backend error");
+//         navigate('/upload');
+//       }
+//     };
+
+//     performScan();
+//     return () => clearInterval(timer);
+//   }, []);
+
+//   return (
+//     <div className="flex flex-col items-center justify-center h-screen">
+//       <motion.div className="w-64 h-64 border rounded-full mb-8" />
+
+//       <h2 className="text-2xl">Analyzing MRI...</h2>
+
+//       <div className="w-80 h-2 bg-gray-200 mt-6">
+//         <div style={{ width: `${progress}%` }} className="bg-blue-500 h-full" />
+//       </div>
+
+//       <p className="mt-2">{Math.round(progress)}%</p>
+//     </div>
+//   );
+// }
+
+
+
+
 import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
@@ -262,13 +402,18 @@ export default function ScannerPage() {
   const [progress, setProgress] = useState(0);
 
   useEffect(() => {
-    if (!mriFile || !patientInfo?.age) {
+    if (!mriImage) {
       navigate('/upload');
       return;
     }
 
+    // Create a fake progress incrementer to keep UI alive
+    // while the real network request happens
     const timer = setInterval(() => {
-      setProgress((prev) => (prev >= 90 ? prev : prev + 2));
+      setProgress((prev) => {
+        if (prev >= 90) return prev; // Hold at 90% until backend responds
+        return prev + 2; 
+      });
     }, 100);
 
     const performScan = async () => {
@@ -276,66 +421,96 @@ export default function ScannerPage() {
         const formData = new FormData();
         // Send the raw Blob/File to FastAPI, NOT the URL string
         formData.append('file', mriFile || mriImage);
+        
+        // Add required age parameter as an integer
+        const ageNum = parseInt(patientInfo?.age) || 0;
+        formData.append('age', ageNum.toString());
 
         // Fallback to local port 8000 (FastAPI default)
         const apiUrl = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
-
+        
         const response = await axios.post(`${apiUrl}/predict`, formData, {
-          headers: { 'Content-Type': 'multipart/form-data' },
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
         });
 
+        // --- SUPABASE INTEGRATION ---
         if (user) {
           const timestamp = Date.now();
+          const baseFolder = `${user.id}/${timestamp}`;
+          let mriUrl = null;
           let overlayUrl = null;
           let maskUrl = null;
 
           try {
-            // Upload Overlay
+            // 1. MRI Image was ALREADY uploaded in UploadPage.jsx
+            // `mriImage` state now correctly holds the Public URL.
+            // We just need to upload the AI outputs generated by FastAPI.
+
+            let overlayUrl = null;
+            let maskUrl = null;
+
+            // 2. Upload Overlay
             if (response.data.overlay_image) {
-              const overlayBlob = await (await fetch(
-                `data:image/png;base64,${response.data.overlay_image}`
-              )).blob();
-
-              const path = `original/${timestamp}_overlay.png`;
-
-              await supabase.storage.from('scans').upload(path, overlayBlob);
-
-              overlayUrl = supabase.storage.from('scans').getPublicUrl(path).data.publicUrl;
+              const overlayUri = response.data.overlay_image.startsWith('data:') 
+                 ? response.data.overlay_image 
+                 : `data:image/jpeg;base64,${response.data.overlay_image}`;
+              const overlayBlob = await (await fetch(overlayUri)).blob();
+              const overlayPath = `original/${timestamp}_overlay.jpg`;
+              const { error: ovErr } = await supabase.storage.from('scans').upload(overlayPath, overlayBlob, { contentType: 'image/jpeg' });
+              if (ovErr) throw new Error("Overlay Upload Error: " + ovErr.message);
+              overlayUrl = supabase.storage.from('scans').getPublicUrl(overlayPath).data.publicUrl;
             }
 
-            // Upload Mask
+            // 3. Upload Mask
             if (response.data.raw_mask) {
-              const maskBlob = await (await fetch(
-                `data:image/png;base64,${response.data.raw_mask}`
-              )).blob();
-
-              const path = `original/${timestamp}_mask.png`;
-
-              await supabase.storage.from('scans').upload(path, maskBlob);
-
-              maskUrl = supabase.storage.from('scans').getPublicUrl(path).data.publicUrl;
+              const maskUri = response.data.raw_mask.startsWith('data:') 
+                 ? response.data.raw_mask 
+                 : `data:image/png;base64,${response.data.raw_mask}`;
+              const maskBlob = await (await fetch(maskUri)).blob();
+              const maskPath = `original/${timestamp}_mask.png`;
+              const { error: mkErr } = await supabase.storage.from('scans').upload(maskPath, maskBlob, { contentType: 'image/png' });
+              if (mkErr) throw new Error("Mask Upload Error: " + mkErr.message);
+              maskUrl = supabase.storage.from('scans').getPublicUrl(maskPath).data.publicUrl;
             }
 
+            // 4. Save Database Record
             const stats = response.data.stats || {};
-            const hasTumor = stats.tumor_detected ?? stats.has_tumor ?? response.data.has_tumor ?? true;
+            const hasTumor = stats.tumor_detected ?? false;
+            const tumorAreaPct = stats.tumor_area_pct ?? 0;
             
-            // Real Confidence Score Logic
-            let confidence = stats.confidence ?? response.data.confidence;
-            if (confidence === undefined || confidence === null || confidence === 0.85) {
-               // Generate authentic machine-learning decimals instead of dummy 0.85
-               confidence = hasTumor 
-                 ? 0.89 + (Math.random() * 0.1) // 89.0% to 99.0%
-                 : 0.92 + (Math.random() * 0.07); // 92.0% to 99.0%
+            // Extract dominant tumor type
+            let dominantType = "Unspecified Region";
+            let maxCount = 0;
+            const classCounts = stats.class_counts || {};
+            const labelMap = {
+              '1': 'Necrotic Core',
+              '2': 'Peritumoral Edema',
+              '3': 'Non-Enhancing Tumor',
+              '4': 'Enhancing Tumor',
+              'Necrosis': 'Necrotic Core',
+              'Edema': 'Peritumoral Edema',
+              'Enhancing Tumor': 'Enhancing Tumor'
+            };
+
+            for (const [key, val] of Object.entries(classCounts)) {
+              if (key === '0' || key === 'Background' || key === 'background') continue;
+              if (typeof val === 'number' && val > maxCount) {
+                maxCount = val;
+                dominantType = labelMap[key] || key;
+              }
             }
 
             const { error: dbErr } = await supabase.from('scans').insert({
               user_id: user.id,
               patient_id: patientId,
-              image_url: mriImage,
+              image_url: typeof mriImage === 'string' ? mriImage : null, // The public URL from UploadPage
               overlay_url: overlayUrl,
               mask_url: maskUrl,
-              result: hasTumor ? 'Positive' : 'Negative',
-              confidence: confidence
+              tumor_detected: hasTumor,
+              tumor_area_pct: tumorAreaPct,
+              tumor_type: maxCount > 0 ? dominantType : "No Tumor"
             });
 
             if (dbErr) {
@@ -349,38 +524,132 @@ export default function ScannerPage() {
             toast.error(supaErr.message || "Data tracking failed. Showing local results only.", { duration: 6000 });
           }
         }
+        // -----------------------------
 
         clearInterval(timer);
         setProgress(100);
 
+        // Wait a tiny bit so user sees 100% completion
         setTimeout(() => {
           setScanResult(response.data);
           navigate('/results');
         }, 600);
-
+        
       } catch (error) {
         clearInterval(timer);
-        console.error(error);
-        toast.error("Backend error");
-        navigate('/upload');
+        console.error("Scan Error:", error);
+        toast.error(error.response?.data?.message || "Failed to process scan. Backend unavailable.", {
+          duration: 5000,
+        });
+        
+        // Return to upload so they can retry
+        setTimeout(() => {
+          navigate('/upload');
+        }, 2000);
       }
     };
 
     performScan();
+
     return () => clearInterval(timer);
-  }, []);
+  }, [mriImage, navigate, setScanResult]);
 
   return (
-    <div className="flex flex-col items-center justify-center h-screen">
-      <motion.div className="w-64 h-64 border rounded-full mb-8" />
+    <div className="min-h-[calc(100vh-80px)] w-full flex flex-col items-center justify-center p-6 relative overflow-hidden bg-background">
+      {/* Background Pulse */}
+      <motion.div 
+        animate={{
+          scale: [1, 1.2, 1],
+          opacity: [0.1, 0.3, 0.1],
+        }}
+        transition={{
+          duration: 2,
+          repeat: Infinity,
+          ease: "easeInOut",
+        }}
+        className="absolute w-[800px] h-[800px] border border-primary/20 rounded-full pointer-events-none"
+      />
+      <motion.div 
+        animate={{
+          scale: [1, 1.5, 1],
+          opacity: [0.05, 0.2, 0.05],
+        }}
+        transition={{
+          duration: 3,
+          repeat: Infinity,
+          ease: "easeInOut",
+        }}
+        className="absolute w-[1200px] h-[1200px] border border-primary/10 rounded-full pointer-events-none"
+      />
 
-      <h2 className="text-2xl">Analyzing MRI...</h2>
+      {/* Central Scanner UI */}
+      <div className="relative z-10 flex flex-col items-center">
+        
+        <div className="relative w-64 h-64 mb-12">
+          {/* Outer Rotating Ring */}
+          <motion.div 
+            animate={{ rotate: 360 }}
+            transition={{ duration: 8, repeat: Infinity, ease: "linear" }}
+            className="absolute inset-0 border-t-2 border-r-2 border-primary rounded-full blur-[1px]"
+          />
+          <motion.div 
+            animate={{ rotate: -360 }}
+            transition={{ duration: 12, repeat: Infinity, ease: "linear" }}
+            className="absolute inset-4 border-b-2 border-l-2 border-primary/50 border-dashed rounded-full"
+          />
+          
+          {/* Radar Sweep Effect */}
+          <motion.div 
+            animate={{ rotate: 360 }}
+            transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
+            className="absolute inset-0 rounded-full overflow-hidden"
+          >
+            <div className="absolute top-1/2 left-1/2 w-[200%] h-[200%] origin-top-left bg-gradient-to-r from-transparent via-transparent to-primary/40 -translate-x-1/2 -translate-y-1/2" />
+          </motion.div>
 
-      <div className="w-80 h-2 bg-gray-200 mt-6">
-        <div style={{ width: `${progress}%` }} className="bg-blue-500 h-full" />
+          <div className="absolute inset-0 m-auto w-40 h-40 bg-primary/10 rounded-full backdrop-blur-md border border-primary/20 flex items-center justify-center shadow-[0_0_50px_rgba(var(--color-primary),0.3)]">
+            {/* Inner Core Pulse */}
+             <motion.div
+               animate={{ scale: [0.8, 1, 0.8], opacity: [0.5, 1, 0.5] }}
+               transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
+               className="w-20 h-20 bg-primary rounded-full blur-xl"
+             />
+          </div>
+        </div>
+
+        <motion.div 
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="text-center"
+        >
+          <h2 className="text-3xl font-bold tracking-widest text-primary mb-4 uppercase text-glow">
+            Analyzing
+          </h2>
+          <div className="flex font-mono text-sm text-primary/80 space-x-4 mb-8 pt-4">
+            <p className="flex flex-col">
+              <span className="text-muted-foreground text-xs uppercase tracking-widest">Neural</span>
+              0x1928FFA
+            </p>
+            <p className="flex flex-col">
+              <span className="text-muted-foreground text-xs uppercase tracking-widest">Model</span>
+              V4-DeepRes
+            </p>
+            <p className="flex flex-col">
+              <span className="text-muted-foreground text-xs uppercase tracking-widest">Live API</span>
+              Connecting...
+            </p>
+          </div>
+
+          <div className="w-80 h-2 bg-white/5 rounded-full overflow-hidden border border-white/10 relative">
+            <motion.div 
+              style={{ width: `${progress}%` }}
+              className="absolute top-0 left-0 h-full bg-primary box-glow transition-all duration-300"
+            />
+          </div>
+          <p className="mt-3 font-mono text-sm text-primary/80">{Math.round(progress)}% Complete</p>
+        </motion.div>
       </div>
 
-      <p className="mt-2">{Math.round(progress)}%</p>
     </div>
   );
 }

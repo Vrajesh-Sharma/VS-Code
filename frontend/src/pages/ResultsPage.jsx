@@ -221,8 +221,8 @@ export default function ResultsPage() {
   
   // Recharts data for the area gauge
   const chartData = [
-    { name: 'Area', value: parseFloat(normalizedAreaPct) || 0 },
-    { name: 'Remaining', value: Math.max(0, 100 - (parseFloat(normalizedAreaPct) || 0)) },
+    { name: 'Area', value: parseFloat((meanTumorConfidence * 100).toFixed(2)) || 0 },
+    { name: 'Remaining', value: Math.max(0, 100 - (parseFloat((meanTumorConfidence * 100).toFixed(2)) || 0)) },
   ];
   const chartColor = hasTumor ? '#FF453A' : '#0A84FF'; // iOS-like destructive vs primary
 
@@ -373,7 +373,7 @@ export default function ResultsPage() {
                    {hasTumor && (
                      <div className="mt-4 flex flex-col gap-1.5 border-l-2 border-destructive/30 pl-3">
                        <p className="text-[13px] uppercase tracking-widest text-muted-foreground font-semibold">Detected Type</p>
-                       <p className="text-sm font-mono text-white/90">{getDominantClass(stats.class_counts)}</p>
+                       <p className="text-sm font-mono text-white/90  uppercase">{getDominantClass(stats.class_counts)}</p>
                        
                        <p className="text-[13px] uppercase tracking-widest text-muted-foreground font-semibold mt-1">Tumor Area</p>
                        <p className="text-sm font-mono text-white/90">{stats.tumor_area_pct ? `${stats.tumor_area_pct.toFixed(2)}%` : 'Calculating...'}</p>
@@ -402,20 +402,20 @@ export default function ResultsPage() {
                        stroke="none"
                        cornerRadius={5}
                      >
-                       <Cell fill={chartColor} className="drop-shadow-[0_0_10px_currentColor]" />
+                       <Cell fill={chartColor} className="red" />
                        <Cell fill="rgba(255,255,255,0.05)" />
                      </Pie>
                    </PieChart>
                    <div className="absolute inset-0 flex flex-col items-center justify-center">
-                     <span className="text-lg font-bold font-mono text-white">{normalizedAreaPct}%</span>
+                     <span className="text-lg font-bold font-mono text-white">{(meanTumorConfidence * 100).toFixed(2)}%</span>
                    </div>
                  </div>
               </div>
 
               <div className="mt-8 border-t border-white/10 pt-6 relative z-10">
-                <p className="text-[15px] leading-relaxed text-foreground/90 font-medium">
+                {/* <p className="text-[15px] leading-relaxed text-foreground/90 font-medium">
                    The DeepRes V4 model analyzed the sequence and {hasTumor ? 'identified regions consistent with neoplastic growth.' : 'found no significant hyperintensities or structural abnormalities.'}
-                </p>
+                </p> */}
                 {hasTumor && (
                   <div className="mt-5 bg-destructive/10 border border-destructive/20 p-4 rounded-xl flex items-start gap-4">
                     <div className="w-2 h-2 rounded-full bg-destructive mt-1.5 animate-ping shrink-0" />
