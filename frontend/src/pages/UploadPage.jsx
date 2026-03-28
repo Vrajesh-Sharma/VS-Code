@@ -119,7 +119,7 @@ export default function UploadPage() {
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.95 }}
-        className="glass-panel w-full max-w-2xl rounded-3xl p-8 md:p-12 shadow-2xl relative z-10"
+        className="glass-panel w-full max-w-2xl rounded-3xl p-6 sm:p-8 md:p-12 shadow-2xl relative z-10"
       >
         <h2 className="text-3xl font-bold mb-8 text-glow">New Scan Session</h2>
         

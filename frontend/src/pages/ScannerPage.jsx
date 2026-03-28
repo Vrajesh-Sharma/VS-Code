@@ -31,6 +31,10 @@ export default function ScannerPage() {
         const formData = new FormData();
         // Send the raw Blob/File to FastAPI, NOT the URL string
         formData.append('file', mriFile || mriImage);
+        
+        // Add required age parameter as an integer
+        const ageNum = parseInt(patientInfo?.age) || 0;
+        formData.append('age', ageNum.toString());
 
         // Fallback to local port 8000 (FastAPI default)
         const apiUrl = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
@@ -83,15 +87,29 @@ export default function ScannerPage() {
 
             // 4. Save Database Record
             const stats = response.data.stats || {};
-            const hasTumor = stats.tumor_detected ?? stats.has_tumor ?? response.data.has_tumor ?? true;
+            const hasTumor = stats.tumor_detected ?? false;
+            const tumorAreaPct = stats.tumor_area_pct ?? 0;
             
-            // Real Confidence Score Logic
-            let confidence = stats.confidence ?? response.data.confidence;
-            if (confidence === undefined || confidence === null || confidence === 0.85) {
-               // Generate authentic machine-learning decimals instead of dummy 0.85
-               confidence = hasTumor 
-                 ? 0.89 + (Math.random() * 0.1) // 89.0% to 99.0%
-                 : 0.92 + (Math.random() * 0.07); // 92.0% to 99.0%
+            // Extract dominant tumor type
+            let dominantType = "Unspecified Region";
+            let maxCount = 0;
+            const classCounts = stats.class_counts || {};
+            const labelMap = {
+              '1': 'Necrotic Core',
+              '2': 'Peritumoral Edema',
+              '3': 'Non-Enhancing Tumor',
+              '4': 'Enhancing Tumor',
+              'Necrosis': 'Necrotic Core',
+              'Edema': 'Peritumoral Edema',
+              'Enhancing Tumor': 'Enhancing Tumor'
+            };
+
+            for (const [key, val] of Object.entries(classCounts)) {
+              if (key === '0' || key === 'Background' || key === 'background') continue;
+              if (typeof val === 'number' && val > maxCount) {
+                maxCount = val;
+                dominantType = labelMap[key] || key;
+              }
             }
 
             const { error: dbErr } = await supabase.from('scans').insert({
@@ -100,8 +118,9 @@ export default function ScannerPage() {
               image_url: typeof mriImage === 'string' ? mriImage : null, // The public URL from UploadPage
               overlay_url: overlayUrl,
               mask_url: maskUrl,
-              result: hasTumor ? 'Positive' : 'Negative',
-              confidence: confidence
+              tumor_detected: hasTumor,
+              tumor_area_pct: tumorAreaPct,
+              tumor_type: maxCount > 0 ? dominantType : "No Tumor"
             });
 
             if (dbErr) {

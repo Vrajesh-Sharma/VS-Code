@@ -30,8 +30,9 @@ export default function HistoryPage() {
           id,
           patient_id,
           created_at,
-          result,
-          confidence,
+          tumor_detected,
+          tumor_area_pct,
+          tumor_type,
           image_url,
           overlay_url,
           mask_url,
@@ -145,20 +146,23 @@ export default function HistoryPage() {
               </button>
             </div>
           ) : (
-            <div className="w-full overflow-x-auto">
-              <table className="w-full text-left border-collapse">
+            <div className="w-full">
+              {/* Desktop Table View */}
+              <div className="hidden lg:block w-full overflow-x-auto">
+                <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="border-b border-white/10 bg-black/20 text-xs uppercase tracking-widest text-muted-foreground">
                     <th className="py-4 px-6 font-semibold">Patient</th>
                     <th className="py-4 px-6 font-semibold">Date processed</th>
                     <th className="py-4 px-6 font-semibold">AI Prediction</th>
-                    <th className="py-4 px-6 font-semibold">Confidence</th>
+                    <th className="py-4 px-6 font-semibold">Tumor Area</th>
+                    <th className="py-4 px-6 font-semibold">Type</th>
                     <th className="py-4 px-6 font-semibold text-right">Data View</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
                   {filteredScans.map((scan) => {
-                    const hasTumor = scan.result === 'Positive' || scan.result === 'true' || scan.result === true;
+                    const hasTumor = scan.tumor_detected;
                     return (
                       <tr 
                          key={scan.id} 
@@ -189,7 +193,10 @@ export default function HistoryPage() {
                           </div>
                         </td>
                         <td className="py-4 px-6 font-mono text-sm">
-                          {scan.confidence ? `${(scan.confidence <= 1 ? scan.confidence * 100 : scan.confidence).toFixed(1)}%` : 'N/A'}
+                          {scan.tumor_area_pct ? `${scan.tumor_area_pct.toFixed(1)}%` : 'N/A'}
+                        </td>
+                        <td className="py-4 px-6 font-mono text-sm">
+                          {scan.tumor_type || 'N/A'}
                         </td>
                         <td className="py-4 px-6 text-right">
                           <div className="flex items-center justify-end gap-2">
@@ -220,6 +227,74 @@ export default function HistoryPage() {
                   })}
                 </tbody>
               </table>
+              </div>
+
+              {/* Mobile Card View */}
+              <div className="lg:hidden flex flex-col p-4 sm:p-6 gap-4">
+                {filteredScans.map((scan) => {
+                  const hasTumor = scan.tumor_detected;
+                  return (
+                    <div 
+                      key={scan.id} 
+                      onClick={() => setSelectedScan(scan)}
+                      className="glass-panel p-5 rounded-3xl border border-white/5 flex flex-col gap-4 active:scale-[0.98] transition-all cursor-pointer bg-black/20 hover:border-primary/30"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="w-12 h-12 rounded-full bg-primary/10 border border-white/5 flex items-center justify-center text-primary shrink-0">
+                            <User className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <p className="font-bold text-white text-lg">{scan.patients?.name || 'Unknown'}</p>
+                            <p className="text-sm text-muted-foreground">{scan.patients?.age ? `${scan.patients.age} Years` : 'Age N/A'}</p>
+                          </div>
+                        </div>
+                        <div className={`p-2 rounded-full border ${hasTumor ? 'bg-destructive/10 text-destructive border-destructive/20' : 'bg-primary/10 text-primary border-primary/20'}`}>
+                          {hasTumor ? <AlertTriangle className="w-5 h-5" /> : <CheckCircle2 className="w-5 h-5" />}
+                        </div>
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-4 border-t border-white/10 pt-4 mt-2">
+                        <div>
+                          <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Processed</p>
+                          <div className="flex items-center gap-1.5 text-sm font-medium">
+                            <Calendar className="w-3.5 h-3.5" />
+                            {new Date(scan.created_at).toLocaleDateString()}
+                          </div>
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Details</p>
+                          <p className="text-sm font-mono font-medium truncate">
+                            {scan.tumor_area_pct ? `${scan.tumor_area_pct.toFixed(1)}%` : 'N/A'} {scan.tumor_type ? `- ${scan.tumor_type}` : ''}
+                          </p>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center justify-end gap-3 border-t border-white/10 pt-4 mt-1">
+                             {scan.image_url && (
+                               <a href={scan.image_url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-muted-foreground hover:bg-primary/20 hover:text-primary transition-colors">
+                                 <FileImage className="w-4 h-4" />
+                               </a>
+                             )}
+                             {scan.overlay_url && (
+                               <a href={scan.overlay_url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-muted-foreground hover:bg-purple-500/20 hover:text-purple-400 transition-colors">
+                                 <ExternalLink className="w-4 h-4" />
+                               </a>
+                             )}
+                             <button 
+                               onClick={(e) => { 
+                                 e.stopPropagation(); 
+                                 setDeletingScan(scan); 
+                               }}
+                               className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors ml-auto" 
+                             >
+                               <Trash2 className="w-4 h-4" />
+                             </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
         </motion.div>
@@ -277,11 +352,20 @@ export default function HistoryPage() {
                    </p>
                  </div>
                  <div className="text-right">
-                   <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-bold uppercase tracking-wider border mb-1 ${(selectedScan.result === 'Positive' || selectedScan.result === 'true' || selectedScan.result === true) ? 'bg-destructive/10 text-destructive border-destructive/20' : 'bg-primary/10 text-primary border-primary/20'}`}>
-                     {(selectedScan.result === 'Positive' || selectedScan.result === 'true' || selectedScan.result === true) ? 'Tumor Detected' : 'No Anomalies'}
+                   <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-bold uppercase tracking-wider border mb-1 ${selectedScan.tumor_detected ? 'bg-destructive/10 text-destructive border-destructive/20' : 'bg-primary/10 text-primary border-primary/20'}`}>
+                     {selectedScan.tumor_detected ? 'Tumor Detected' : 'No Anomalies'}
                    </div>
                    <p className="text-xs text-muted-foreground uppercase font-mono tracking-widest mt-1">
-                     CONF: {selectedScan.confidence ? `${(selectedScan.confidence <= 1 ? selectedScan.confidence * 100 : selectedScan.confidence).toFixed(1)}%` : 'N/A'}
+                     AREA: {selectedScan.tumor_area_pct ? `${selectedScan.tumor_area_pct.toFixed(1)}%` : 'N/A'}
+                   </p>
+                   <p className="text-xs text-muted-foreground uppercase font-mono tracking-widest mt-1">
+                     TYPE: {selectedScan.tumor_type || 'N/A'}
+                   </p>
+                   <p className="text-xs text-muted-foreground uppercase font-mono tracking-widest mt-1">
+                     CONF: {selectedScan.mean_tumor_confidence ? `${(selectedScan.mean_tumor_confidence <= 1 ? selectedScan.mean_tumor_confidence * 100 : selectedScan.mean_tumor_confidence).toFixed(1)}%` : '0.0%'}
+                   </p>
+                   <p className="text-xs text-muted-foreground uppercase font-mono tracking-widest mt-1 text-purple-400">
+                     PROGNOSIS: {selectedScan.survival_label || 'N/A'}
                    </p>
                  </div>
                </div>
