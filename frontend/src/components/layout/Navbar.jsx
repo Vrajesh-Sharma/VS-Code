@@ -1,29 +1,40 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { User, Activity, Plus } from 'lucide-react';
+import { User, Activity, Plus, Menu } from 'lucide-react';
 import ProfileModal from '../profile/ProfileModal';
 import useStore from '../../store/useStore';
 
 export default function Navbar() {
   const navigate = useNavigate();
-  const { user } = useStore();
+  const { user, toggleMobileMenu } = useStore();
   const [isProfileOpen, setIsProfileOpen] = useState(false);
 
   return (
     <>
       <nav className="fixed top-0 left-0 w-full h-20 glass-panel border-b border-white/5 z-50 flex items-center justify-between px-6 lg:px-12 backdrop-blur-xl bg-background/40">
       
-      {/* Brand */}
-      <div 
-        onClick={() => navigate('/')} 
-        className="flex items-center gap-3 cursor-pointer group"
-      >
+      {/* Mobile Menu Toggle & Brand */}
+      <div className="flex items-center gap-4">
+        {user && (
+          <button 
+            onClick={() => toggleMobileMenu()}
+            className="md:hidden p-2 -ml-2 text-muted-foreground hover:text-white transition-colors rounded-xl hover:bg-white/5"
+          >
+            <Menu className="w-6 h-6" />
+          </button>
+        )}
+        
+        <div 
+          onClick={() => navigate('/')} 
+          className="flex items-center gap-3 cursor-pointer group"
+        >
         <div className="w-10 h-10 rounded-xl bg-primary/20 border border-primary/50 flex items-center justify-center text-primary group-hover:scale-110 transition-transform shadow-[0_0_15px_rgba(0,255,255,0.2)]">
           <Activity className="w-6 h-6" />
         </div>
         <div className="font-heading font-bold text-xl tracking-tight hidden sm:block text-glow">
           Tumor<span className="text-primary">Trace</span>
         </div>
+      </div>
       </div>
 
       {/* Right Side Actions */}

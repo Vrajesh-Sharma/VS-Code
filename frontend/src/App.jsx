@@ -95,7 +95,7 @@ export default function App() {
       <div className="flex flex-1 pt-20"> {/* pt-20 to clear fixed Navbar height */}
         {!hideSidebar && <Sidebar />}
         
-        <main className={`flex-1 min-w-0 transition-all duration-300 ${!hideSidebar ? 'ml-20 md:ml-64' : ''}`}>
+        <main className={`flex-1 min-w-0 transition-all duration-300 ${!hideSidebar ? 'ml-0 md:ml-64' : ''}`}>
           <AnimatePresence mode="wait">
             <Routes location={location} key={location.pathname}>
               <Route path="/" element={<LandingPage />} />

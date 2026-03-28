@@ -320,10 +320,17 @@ export default function UploadPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-6">
-      <motion.div className="glass-panel w-full max-w-2xl p-8 rounded-3xl">
-        <h2 className="text-3xl font-bold mb-8">New Scan Session</h2>
-
+    <div className="min-h-screen flex items-center justify-center p-6 relative overflow-hidden">
+      <div className="absolute inset-0 bg-primary/5 pointer-events-none" />
+      
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.95 }}
+        className="glass-panel w-full max-w-2xl rounded-3xl p-8 md:p-12 shadow-2xl relative z-10"
+      >
+        <h2 className="text-3xl font-bold mb-8 text-glow">New Scan Session</h2>
+        
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
           <input {...register('patientName')} placeholder="Name" />
           {errors.patientName && <p>{errors.patientName.message}</p>}

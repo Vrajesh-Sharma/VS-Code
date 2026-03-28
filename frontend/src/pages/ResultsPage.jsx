@@ -41,9 +41,11 @@ export default function ResultsPage() {
 
   // Safely extract stats depending on backend shape
   const stats = scanResult.stats || {};
-  const hasTumor = stats.tumor_detected ?? stats.has_tumor ?? scanResult.has_tumor ?? true;
-  const confidence = stats.confidence ?? scanResult.confidence ?? 0.85; // Decimal or percentage
-  const normalizedConfidence = confidence <= 1 ? (confidence * 100).toFixed(1) : parseFloat(confidence).toFixed(1);
+  const hasTumor = stats.tumor_detected ?? false;
+  const tumorAreaPct = stats.tumor_area_pct ?? 0;
+  const normalizedAreaPct = tumorAreaPct.toFixed(1);
+  const meanTumorConfidence = stats.mean_tumor_confidence ?? 0;
+  const survivalLabel = scanResult.survival?.predicted_label || 'N/A';
 
   // Extract real backend images
   const overlayImage = scanResult.overlay_image;
@@ -178,11 +180,13 @@ export default function ResultsPage() {
         yPos += 8;
         
         doc.setTextColor(60, 60, 60);
-        doc.text(`Confidence Score: ${normalizedConfidence}%`, margin, yPos);
-        yPos += 8;
         doc.text(`Morphology Class: ${getDominantClass(stats.class_counts)}`, margin, yPos);
         yPos += 8;
         doc.text(`Tumor Area Coverage: ${stats.tumor_area_pct ? `${stats.tumor_area_pct.toFixed(2)}%` : 'N/A'}`, margin, yPos);
+        yPos += 8;
+        doc.text(`Mean Tumor Confidence: ${(meanTumorConfidence <= 1 ? meanTumorConfidence * 100 : meanTumorConfidence).toFixed(1)}%`, margin, yPos);
+        yPos += 8;
+        doc.text(`Survival Prognosis: ${survivalLabel}`, margin, yPos);
         yPos += 12;
       } else {
         doc.setTextColor(22, 163, 74); // Tailwind green
@@ -190,7 +194,6 @@ export default function ResultsPage() {
         yPos += 8;
 
         doc.setTextColor(60, 60, 60);
-        doc.text(`Confidence Score: ${normalizedConfidence}%`, margin, yPos);
         yPos += 12;
       }
 
@@ -216,10 +219,10 @@ export default function ResultsPage() {
     }
   };
   
-  // Recharts data for the confidence gauge
+  // Recharts data for the area gauge
   const chartData = [
-    { name: 'Confidence', value: parseFloat(normalizedConfidence) },
-    { name: 'Remaining', value: 100 - parseFloat(normalizedConfidence) },
+    { name: 'Area', value: parseFloat(normalizedAreaPct) || 0 },
+    { name: 'Remaining', value: Math.max(0, 100 - (parseFloat(normalizedAreaPct) || 0)) },
   ];
   const chartColor = hasTumor ? '#FF453A' : '#0A84FF'; // iOS-like destructive vs primary
 
@@ -269,7 +272,7 @@ export default function ResultsPage() {
                 <button
                   key={tab.id}
                   onClick={() => setActiveView(tab.id)}
-                  className={`flex-1 py-2.5 text-sm font-semibold rounded-xl transition-all duration-300 ${
+                  className={`flex-1 py-3 sm:py-2.5 text-[10px] leading-tight sm:text-sm font-semibold rounded-xl transition-all duration-300 ${
                     activeView === tab.id 
                     ? 'bg-primary/20 text-primary shadow-[0_0_15px_rgba(var(--color-primary),0.2)]' 
                     : 'text-muted-foreground hover:text-foreground hover:bg-white/5'
@@ -281,7 +284,7 @@ export default function ResultsPage() {
             </div>
 
             {/* Main Image Viewer */}
-            <div className="glass-panel rounded-3xl relative group overflow-hidden border border-white/5 aspect-square xl:aspect-[4/3] w-full flex items-center justify-center p-4">
+            <div className="glass-panel rounded-3xl relative group overflow-hidden border border-white/5 aspect-[4/5] sm:aspect-square xl:aspect-[4/3] w-full flex items-center justify-center p-2 sm:p-4 mt-2 mb-6">
                {/* Background Glow */}
                <div className={`absolute -inset-20 opacity-20 blur-3xl transition-colors duration-1000 pointer-events-none ${hasTumor ? 'bg-destructive' : 'bg-primary'}`} />
                
@@ -374,6 +377,12 @@ export default function ResultsPage() {
                        
                        <p className="text-[13px] uppercase tracking-widest text-muted-foreground font-semibold mt-1">Tumor Area</p>
                        <p className="text-sm font-mono text-white/90">{stats.tumor_area_pct ? `${stats.tumor_area_pct.toFixed(2)}%` : 'Calculating...'}</p>
+                       
+                       <p className="text-[13px] uppercase tracking-widest text-muted-foreground font-semibold mt-1">Mean Confidence</p>
+                       <p className="text-sm font-mono text-white/90">{(meanTumorConfidence <= 1 ? meanTumorConfidence * 100 : meanTumorConfidence).toFixed(1)}%</p>
+                       
+                       <p className="text-[13px] uppercase tracking-widest text-muted-foreground font-semibold mt-1">Survival Prognosis</p>
+                       <p className="text-sm font-mono text-white/90">{survivalLabel}</p>
                      </div>
                    )}
                  </div>
@@ -398,7 +407,7 @@ export default function ResultsPage() {
                      </Pie>
                    </PieChart>
                    <div className="absolute inset-0 flex flex-col items-center justify-center">
-                     <span className="text-lg font-bold font-mono text-white">{normalizedConfidence}%</span>
+                     <span className="text-lg font-bold font-mono text-white">{normalizedAreaPct}%</span>
                    </div>
                  </div>
               </div>

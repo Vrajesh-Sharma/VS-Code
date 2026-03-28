@@ -81,7 +81,7 @@ export default function LandingPage() {
           <span className="w-2 h-2 rounded-full bg-primary animate-ping" /> DeepRes V4 Active
         </div>
         
-        <h1 className="text-6xl md:text-8xl font-bold tracking-tighter mb-6 text-white text-glow leading-tight">
+        <h1 className="text-5xl sm:text-6xl md:text-8xl font-bold tracking-tighter mb-6 text-white text-glow leading-tight">
           Tumor<span className="text-primary relative inline-block">Trace
             <motion.span 
               initial={{ scaleX: 0 }} animate={{ scaleX: 1 }} transition={{ delay: 1, duration: 0.8 }}

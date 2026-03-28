@@ -13,6 +13,7 @@ const useStore = create((set) => ({
   mriImageUrl: null,
   scanResult: null,
   isScanning: false,
+  isMobileMenuOpen: false,
 
   setUser: (user) => set({ user }),
   clearUser: () => set({ user: null }),
@@ -23,6 +24,9 @@ const useStore = create((set) => ({
   setMriImageUrl: (url) => set({ mriImageUrl: url }),
   setScanResult: (result) => set({ scanResult: result }),
   setIsScanning: (status) => set({ isScanning: status }),
+  toggleMobileMenu: (status) => set((state) => ({ 
+    isMobileMenuOpen: status !== undefined ? status : !state.isMobileMenuOpen 
+  })),
   resetSession: () => set({ 
     patientId: null,
     patientInfo: { patientName: '', age: '', notes: '' },
